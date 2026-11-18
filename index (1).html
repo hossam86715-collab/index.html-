@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>موتو رش أونلاين</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,Arial,sans-serif;color:#fff;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+#o{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(8,10,16,.84);text-align:center;z-index:5}
+#o[hidden]{display:none}
+h1{margin:0;font-size:30px}
+p{margin:0;opacity:.8}
+button,input{font:inherit;font-size:18px;padding:10px 22px;border-radius:12px;border:0}
+button{background:#ff3d2e;color:#fff;font-weight:700}
+button.b{background:#2b3345}
+input{width:120px;text-align:center;text-transform:uppercase;direction:ltr}
+.row{display:flex;gap:8px;align-items:center;justify-content:center}
+.big{font-size:44px;letter-spacing:6px;direction:ltr;color:#33e0ff;font-weight:800}
+.tb{position:fixed;bottom:16px;width:82px;height:82px;border-radius:50%;background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.4);font-size:30px;display:flex;align-items:center;justify-content:center;z-index:3}
+.tb.on{background:rgba(255,61,46,.65)}
+#rot{display:none;position:fixed;inset:0;background:#0b0d12;z-index:9;align-items:center;justify-content:center;font-size:22px;text-align:center}
+@media (orientation:portrait){#rot{display:flex}}
+</style></head><body>
+<canvas id="c"></canvas>
+<div class="tb" id="bl" style="left:14px">◀</div><div class="tb" id="br" style="left:110px">▶</div>
+<div class="tb" id="bb" style="right:110px">▼</div><div class="tb" id="bg" style="right:14px">▲</div>
+<div id="o"></div>
+<div id="rot">📱↻<br>لف الموبايل بالعرض</div>
+<script>
+const cv=document.getElementById('c'),g=cv.getContext('2d'),o=document.getElementById('o');
+let W,H;function rs(){W=cv.width=innerWidth;H=cv.height=innerHeight}onresize=rs;rs();
+const SEG=200,RW=2000,CH=1000,CD=.84,N=110,TOTAL=SEG*3600,MAXS=14000;
+const curve=i=>Math.sin(i/55)*3.2+Math.sin(i/21)*1.4;
+const hash=i=>{const h=Math.sin(i*127.1)*43758.5453;return h-Math.floor(h)};
+const me={pos:0,x:0,sp:0,lean:0},op={pos:0,x:0,sp:0,lean:0,tp:0,tx:0,tl:0,on:false};
+let mode='menu',cnt=0,bg=0,online=false,host=false,peer,conn,keys={l:0,r:0,g:0,b:0},T=0,acc=0,ac,osc,gn;
+
+function ov(h){o.innerHTML=h||'';o.hidden=!h}
+function fs(){try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape').catch(()=>{})}catch(e){}
+ if(!ac)try{ac=new AudioContext();osc=ac.createOscillator();gn=ac.createGain();osc.type='sawtooth';gn.gain.value=0;osc.connect(gn);gn.connect(ac.destination);osc.start()}catch(e){}}
+function menu(m){online=false;op.on=false;mode='menu';if(conn)try{conn.close()}catch(e){}if(peer)try{peer.destroy()}catch(e){}conn=peer=null;
+ ov('<h1>🏍 موتو رش أونلاين</h1><p>سباق موتوسيكلات ضد صاحبك في غرفة خاصة</p>'+(m?'<p style="color:#ff8a80">'+m+'</p>':'')+
+ '<button onclick="mk()">إنشاء غرفة</button><div class="row"><input id="cd" maxlength="5" placeholder="الكود"><button class="b" onclick="jn()">انضمام</button></div><button class="b" onclick="solo()">لعب فردي ضد البوت</button>')}
+function net(){if(typeof Peer==='undefined'){menu('مفيش اتصال بسيرفر الغرف، اتأكد من النت');return false}return true}
+function mk(){fs();if(!net())return;host=true;const code=Math.random().toString(36).slice(2,7).toUpperCase();
+ ov('<p>جاري إنشاء الغرفة...</p>');peer=new Peer('motorush-'+code);
+ peer.on('open',()=>ov('<p>كود الغرفة، ابعته لصاحبك</p><div class="big">'+code+'</div><p>بانتظار صاحبك...</p><button class="b" onclick="menu()">إلغاء</button>'));
+ peer.on('connection',c=>{conn=c;setup(c)});peer.on('error',e=>menu('خطأ في الاتصال: '+e.type))}
+function jn(){const code=(document.getElementById('cd').value||'').trim().toUpperCase();if(code.length<5)return;fs();if(!net())return;host=false;
+ ov('<p>جاري الدخول...</p>');peer=new Peer();
+ peer.on('open',()=>{conn=peer.connect('motorush-'+code,{reliable:false});setup(conn)});
+ peer.on('error',e=>menu(e.type=='peer-unavailable'?'الغرفة دي مش موجودة':'خطأ في الاتصال: '+e.type))}
+function setup(c){c.on('open',()=>{online=true;op.on=true;
+  ov(host?'<h1>✅ صاحبك دخل الغرفة</h1><button onclick="go()">ابدأ السباق</button>':'<h1>✅ دخلت الغرفة</h1><p>مستني المضيف يبدأ السباق...</p>')});
+ c.on('data',d=>{if(d.go)count();else if(d.fin){if(mode=='race')result(false)}else if('p' in d){op.tp=d.p;op.tx=d.x;op.sp=d.s;op.tl=d.l}});
+ c.on('close',()=>{if(online)menu('صاحبك خرج من الغرفة')})}
+function go(){fs();conn&&conn.send({go:1});count()}
+function solo(){fs();online=false;op.on=true;count()}
+function count(){me.pos=me.x=me.sp=me.lean=0;op.pos=op.tp=op.x=op.tx=op.sp=0;op.on=true;cnt=3.99;mode='count';ov('')}
+function result(w){mode='end';ov('<h1>'+(w?'🏆 كسبت السباق!':'😢 صاحبك سبقك')+'</h1>'+((host||!online)?'<button onclick="again()">سباق تاني</button>':'<p>مستني المضيف يبدأ سباق تاني...</p>')+'<button class="b" onclick="menu()">القائمة</button>')}
+function again(){conn&&conn.send({go:1});count()}
+
+function bind(id,k){const e=document.getElementById(id),on=v=>ev=>{ev.preventDefault();keys[k]=v;e.classList.toggle('on',!!v)};
+ e.onpointerdown=on(1);e.onpointerup=e.onpointercancel=e.onpointerleave=on(0)}
+bind('bl','l');bind('br','r');bind('bg','g');bind('bb','b');
+const km={ArrowLeft:'l',a:'l',ArrowRight:'r',d:'r',ArrowUp:'g',w:'g',ArrowDown:'b',s:'b',' ':'b'};
+onkeydown=e=>{if(km[e.key])keys[km[e.key]]=1};onkeyup=e=>{if(km[e.key])keys[km[e.key]]=0};
+
+function upd(dt){T+=dt;
+ if(mode=='menu'){me.pos+=4500*dt;me.sp=4500;op.on=false;return}
+ if(mode=='count'){cnt-=dt;if(cnt<=0){mode='race';cnt=0}}
+ if(mode=='race'){
+  const sp=me.sp/MAXS,st=keys.r-keys.l,base=me.pos/SEG|0;
+  if(keys.g)me.sp+=4200*dt*(1-sp*.78);else me.sp-=1500*dt;
+  if(keys.b)me.sp-=11000*dt;
+  if(Math.abs(me.x)>1.08)me.sp-=me.sp*1.8*dt;
+  me.sp=Math.max(0,Math.min(MAXS,me.sp));
+  me.x+=st*dt*2.1*sp-dt*2*sp*sp*curve(base)*.22;
+  me.x=Math.max(-2.3,Math.min(2.3,me.x));
+  me.lean+=(st*.45-curve(base)*sp*.05-me.lean)*Math.min(1,dt*8);
+  bg+=curve(base)*sp*dt*90;me.pos+=me.sp*dt;
+  if(me.pos>=TOTAL){conn&&conn.send({fin:1});result(true)}
+ }
+ if(op.on&&(mode=='race'||mode=='count')){
+  if(online){op.tp+=op.sp*dt;const k=Math.min(1,dt*10);op.pos+=(op.tp-op.pos)*k;op.x+=(op.tx-op.x)*k;op.lean+=(op.tl-op.lean)*k}
+  else if(mode=='race'){const c=Math.abs(curve(op.pos/SEG|0)),t=MAXS*(.8+.06*Math.sin(T/4))*(1-c*.05);op.sp+=(t-op.sp)*dt;
+   op.pos+=op.sp*dt;op.x=Math.sin(op.pos/SEG/30)*.5;op.lean=Math.cos(op.pos/SEG/30)*.15;if(op.pos>=TOTAL&&mode=='race')result(false)}
+ }
+ if(online&&conn&&conn.open&&(mode=='race'||mode=='count')){acc+=dt;if(acc>.05){acc=0;conn.send({p:me.pos,x:me.x,s:me.sp,l:me.lean})}}
+ if(osc){const v=me.sp/MAXS*6.4;osc.frequency.value=45+(v%1)*70+Math.min(5,v|0)*12;gn.gain.value=(mode=='race'||mode=='count')?.045:0}
+}
+
+function rr(x,y,w,h,r,c){g.fillStyle=c;g.beginPath();g.roundRect(x,y,w,h,r);g.fill()}
+function bike(x,y,k,lean,c,tag){g.save();g.translate(x,y);g.scale(k,k);g.fillStyle='rgba(0,0,0,.35)';g.beginPath();g.ellipse(0,0,40,8,0,0,7);g.fill();
+ g.rotate(lean);rr(-8,-56,16,56,7,'#111');rr(-14,-76,28,32,11,c);rr(-3,-76,6,28,2,'#fff4');rr(14,-42,8,32,3,'#9aa');
+ rr(-20,-128,40,56,15,'#232832');rr(-46,-114,92,12,6,'#333');rr(-9,-72,18,5,2,'#ff2b2b');
+ g.fillStyle=c;g.beginPath();g.arc(0,-143,18,0,7);g.fill();rr(-13,-146,26,8,4,'#0008');g.restore();
+ if(tag){g.fillStyle='#fff';g.textAlign='center';g.font='700 '+Math.max(10,k*18)+'px system-ui';g.fillText(tag,x,y-k*172)}}
+function quad(a,b,wf,c,off){off=off||0;g.fillStyle=c;g.beginPath();g.moveTo(a.x+a.w*(off-wf),a.y);g.lineTo(a.x+a.w*(off+wf),a.y);g.lineTo(b.x+b.w*(off+wf),b.y);g.lineTo(b.x+b.w*(off-wf),b.y);g.fill()}
+function tree(x,y,s){rr(x-s*.05,y-s*.3,s*.1,s*.3,0,'#4a3220');g.fillStyle='#1f5d28';g.beginPath();g.moveTo(x-s*.3,y-s*.25);g.lineTo(x,y-s*1.1);g.lineTo(x+s*.3,y-s*.25);g.fill()}
+
+function draw(){
+ const u=H/100,sp=me.sp/MAXS;g.save();if(sp>.8&&mode=='race')g.translate((Math.random()-.5)*sp*3,(Math.random()-.5)*sp*3);
+ let gr=g.createLinearGradient(0,0,0,H/2);gr.addColorStop(0,'#2a6fd6');gr.addColorStop(1,'#d6ebff');g.fillStyle=gr;g.fillRect(0,0,W,H/2+2);
+ g.fillStyle='#6c7f9e';g.beginPath();g.moveTo(0,H/2);for(let x=0;x<=W;x+=16)g.lineTo(x,H/2-u*5-Math.abs(Math.sin((x+bg)/170))*u*9-Math.sin((x+bg)/50)*u*1.5);g.lineTo(W,H/2);g.fill();
+ g.fillStyle='#2f7d32';g.fillRect(0,H/2,W,H/2);
+ const base=me.pos/SEG|0,off=me.pos%SEG,P=[];let x=0,dx=-curve(base)*off/SEG;
+ for(let n=0;n<=N;n++){const z=Math.max(n*SEG-off,30),s=CD/z;P.push({x:W/2+s*(x-me.x*RW)*W/2,y:H/2+s*CH*H/2,w:s*RW*W/2,s});x+=dx;dx+=curve(base+n)}
+ const ow=op.pos+CH*CD,on=Math.floor(ow/SEG)-base;
+ for(let n=N-1;n>=0;n--){const a=P[n],b=P[n+1],i=base+n,al=(i/3|0)%2;
+  g.fillStyle=al?'#2f7d32':'#37903a';g.fillRect(0,b.y,W,a.y-b.y+1);
+  quad(a,b,1.14,al?'#eee':'#d22');quad(a,b,1,al?'#4b4b52':'#45454c');
+  if(al){quad(a,b,.018,'#fff',-.33);quad(a,b,.018,'#fff',.33)}
+  if(i==5||i==TOTAL/SEG|0)quad(a,b,1,'#fff');
+  if(i%5==0){const h=hash(i),sd=h>.5?1:-1,wx=sd*(1.4+h*1.6);tree(a.x+a.w*wx,a.y,a.w*.9*(.7+h*.6))}
+  if(op.on&&n==on&&n>0&&mode!='menu'){const f=(ow%SEG)/SEG,s=a.s+(b.s-a.s)*f,ox=a.x+(b.x-a.x)*f+s*op.x*RW*W/2,oy=a.y+(b.y-a.y)*f;bike(ox,oy,s*H*2.6,op.lean,'#2aa2ff','صاحبك')}
+ }
+ bike(W/2,H-6,H*.0026,me.lean,'#ff3d2e');g.restore();
+ if(mode!='menu')hud(u)}
+function hud(u){const sp=me.sp/MAXS,kmh=Math.round(sp*280),gear=Math.min(6,1+(sp*6.4|0)),cx=W-15*u,cy=15*u,r=11*u;
+ g.lineCap='round';g.lineWidth=2*u;g.strokeStyle='rgba(0,0,0,.5)';g.beginPath();g.arc(cx,cy,r,.75*Math.PI,2.25*Math.PI);g.stroke();
+ g.strokeStyle=sp>.85?'#ff3d2e':'#33e0ff';g.beginPath();g.arc(cx,cy,r,.75*Math.PI,(.75+1.5*sp)*Math.PI);g.stroke();
+ g.fillStyle='#fff';g.textAlign='center';g.font='800 '+7*u+'px system-ui';g.fillText(kmh,cx,cy+2*u);g.font='700 '+2.6*u+'px system-ui';g.fillText('KM/H  G'+gear,cx,cy+7*u);
+ const bw=W*.3,bx=(W-bw)/2,by=3*u;g.fillStyle='rgba(0,0,0,.5)';g.fillRect(bx,by,bw,1.6*u);
+ const dot=(p,c)=>{g.fillStyle=c;g.beginPath();g.arc(bx+bw*Math.min(1,p/TOTAL),by+.8*u,1.5*u,0,7);g.fill()};dot(op.pos,'#2aa2ff');dot(me.pos,'#ff3d2e');
+ g.font='700 '+4*u+'px system-ui';g.textAlign='left';g.fillText('المركز '+(op.on&&op.pos>me.pos?2:1)+'/2',3*u,8*u);
+ if(mode=='count'){g.textAlign='center';g.font='800 '+25*u+'px system-ui';g.fillStyle='#fff';g.fillText(Math.ceil(cnt),W/2,H*.42)}}
+
+let last=performance.now();
+function loop(t){const dt=Math.min(.05,(t-last)/1000);last=t;upd(dt);draw();requestAnimationFrame(loop)}
+menu();requestAnimationFrame(loop);
+</script></body></html>
